@@ -1,0 +1,114 @@
+# test_client.py
+import requests
+import json
+import os
+import sys
+from datetime import datetime
+
+# The URL where your FastAPI server is running
+API_URL = "http://127.0.0.1:8000/analyze/"
+
+# The path to your test image
+IMAGE_PATH = "test_image.jpg"  # Make sure you have an image with this name
+
+# GPS data (optional)
+payload = {
+    "gps_lat": 12.9716,  # Example: Bangalore latitude
+    "gps_lon": 77.5946,  # Example: Bangalore longitude
+}
+
+
+def print_response_details(response_data):
+    """Pretty print the API response details"""
+    print("\n=== Sand Analysis Results ===")
+    
+    # Basic information
+    print(f"Classification: {response_data.get('classification', 'Unknown')}")
+    print(f"Average Grain Size: {response_data.get('average_grain_size_mm', 0):.4f} mm")
+    print(f"Number of Grains: {response_data.get('grain_count', 0)}")
+    
+    # Scale information
+    print(f"Scale: {response_data.get('scale_pixels_per_mm', 0):.2f} pixels/mm")
+    print(f"Scale Detection Confidence: {response_data.get('scale_detection_confidence', 0):.2%}")
+    
+    # Size distribution if available
+    if 'size_distribution' in response_data:
+        print("\nSize Distribution:")
+        for category, percentage in response_data['size_distribution'].items():
+            if percentage > 0:
+                print(f"  - {category}: {percentage:.1f}%")
+    
+    # GPS information
+    if response_data.get('gps_coordinates'):
+        coords = response_data['gps_coordinates']
+        lat = coords.get('latitude')
+        lon = coords.get('longitude')
+        if lat and lon:
+            print(f"\nGPS Coordinates: {lat}, {lon}")
+    
+    print("=============================\n")
+
+
+def save_results_to_file(response_data):
+    """Save analysis results to a JSON file"""
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"sand_analysis_{timestamp}.json"
+    
+    with open(filename, 'w') as f:
+        json.dump(response_data, f, indent=2)
+    
+    print(f"Results saved to {filename}")
+
+
+def main():
+    # Check if file exists
+    if not os.path.exists(IMAGE_PATH):
+        print(f"Error: The file '{IMAGE_PATH}' was not found.")
+        print("Please provide a valid image file path.")
+        return False
+    
+    try:
+        with open(IMAGE_PATH, "rb") as image_file:
+            # The 'files' dictionary is used for multipart/form-data uploads
+            files = {"image_file": (IMAGE_PATH, image_file, "image/jpeg")}
+
+            print("Sending request to server...")
+            response = requests.post(API_URL, data=payload, files=files, timeout=30)
+
+            # Raise an exception if the request was unsuccessful
+            response.raise_for_status()
+            
+            # Process successful response
+            response_data = response.json()
+            print_response_details(response_data)
+            
+            # Save results to file
+            save_results_to_file(response_data)
+            return True
+
+    except FileNotFoundError:
+        print(f"Error: The file '{IMAGE_PATH}' was not found.")
+    except requests.exceptions.ConnectionError:
+        print(f"Error: Could not connect to the server at {API_URL}")
+        print("Make sure the server is running and the URL is correct.")
+    except requests.exceptions.Timeout:
+        print("Error: The request timed out. The server might be overloaded.")
+    except requests.exceptions.HTTPError as e:
+        print(f"HTTP Error: {e}")
+        # Try to get more details from the response
+        try:
+            error_details = response.json()
+            print(f"Server message: {error_details.get('detail', 'No additional details')}")
+        except:
+            print(f"Status code: {response.status_code}")
+    except requests.exceptions.RequestException as e:
+        print(f"An error occurred: {e}")
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+    
+    return False
+
+
+if __name__ == "__main__":
+    success = main()
+    sys.exit(0 if success else 1)
