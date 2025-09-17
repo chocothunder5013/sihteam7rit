@@ -356,3 +356,24 @@ def calculate_size_distribution(diameters_mm: List[float]) -> Dict[str, float]:
 
 
 
+"""
+Sand Grain Analysis API (FastAPI)
+---------------------------------
+Receives sand images and GPS coordinates, detects a ₹10 note for scale, segments grains, and returns analysis results.
+
+Endpoints:
+    POST /analyze/
+        - image_file: image (multipart/form-data)
+        - gps_lat: float (optional)
+        - gps_lon: float (optional)
+        Returns: JSON with classification, average size, std deviation, grain count, scale info, and distribution.
+
+Usage:
+    1. Start server: uvicorn main:app --reload --host 0.0.0.0 --port 8000
+    2. Send POST requests to /analyze/ with image and coordinates.
+
+See README.md for full project documentation.
+"""
+
+
+
