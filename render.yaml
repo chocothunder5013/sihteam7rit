@@ -4,7 +4,7 @@ services:
     env: python
     plan: free
     buildCommand: pip install -r backend/requirements.txt && pip install python-dotenv
-    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+  startCommand: gunicorn -k uvicorn.workers.UvicornWorker backend.main:app --bind 0.0.0.0:$PORT --workers 2
     healthCheckPath: /healthz
     envVars:
       - key: PORT
@@ -21,7 +21,9 @@ services:
 
 # ---
 # Optimization & Production Tips:
-# - For higher concurrency, consider: startCommand: gunicorn -k uvicorn.workers.UvicornWorker backend.main:app --bind 0.0.0.0:$PORT --workers 2
-# - Set plan: standard or higher for production workloads
-# - Add more envVars for DB, Redis, etc. as needed
-# - Use healthCheckPath for Render health monitoring
+# - The app now uses Gunicorn with Uvicorn workers for production concurrency.
+# - You can adjust --workers for more concurrency (usually 2-4 per CPU core).
+# - Make sure gunicorn is in backend/requirements.txt.
+# - Set plan: standard or higher for production workloads.
+# - Add more envVars for DB, Redis, etc. as needed.
+# - Use healthCheckPath for Render health monitoring.
