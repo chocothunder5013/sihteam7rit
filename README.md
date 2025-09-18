@@ -1,4 +1,3 @@
-
 # Beach Grain Sense
 
 Beach Grain Sense is a cross-platform mobile app (Flutter) and backend (Python/FastAPI) for analyzing sand grain size using your phone's camera and geolocation. It uses computer vision to detect a ₹10 note as a scale reference, segments sand grains, and provides a detailed analysis including classification, average size, and distribution.
@@ -89,3 +88,47 @@ This project is licensed under the MIT License.
 
 ---
 For more details, see the code and comments in each module.
+
+---
+
+## Production Async Backend (Celery + Redis)
+
+### Additional Prerequisites
+- [Redis](https://redis.io/) (running locally or on a server)
+- Celery (see `backend/requirements-celery.txt`)
+
+### Setup: Backend Async Processing
+1. Install extra dependencies:
+    ```sh
+    pip install -r requirements-celery.txt
+    ```
+2. Start Redis server (if not already running):
+    ```sh
+    redis-server
+    ```
+3. Start the FastAPI server (as before):
+    ```sh
+    uvicorn main:app --reload --host 0.0.0.0 --port 8000
+    ```
+4. Start the Celery worker (in a new terminal):
+    ```sh
+    celery -A main.celery_app worker --loglevel=info
+    ```
+
+### Async API Usage
+- **Submit analysis job:**
+    - `POST /analyze/` (same as before)
+    - Response: `{ "job_id": "...", "status": "queued" }`
+- **Poll for result:**
+    - `GET /result/{job_id}`
+    - Response:
+        - `{ "status": "pending" }` (still processing)
+        - `{ "status": "success", "result": { ... } }` (done)
+        - `{ "status": "failure", "error": "..." }` (error)
+
+### Example Client Flow
+1. Submit image to `/analyze/` and get `job_id`.
+2. Poll `/result/{job_id}` every few seconds until `status` is `success` or `failure`.
+3. Display results to the user when ready.
+
+---

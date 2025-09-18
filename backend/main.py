@@ -1,3 +1,5 @@
+import numpy as np
+from typing import Tuple, List, Dict, Optional
 # Generalized scale detection for notes, cards, and coins
 def find_scale_and_mask_reference(image: np.ndarray) -> Tuple[Optional[float], Optional[np.ndarray], float, Optional[str]]:
     """
@@ -118,12 +120,26 @@ from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional, Dict, List, Tuple
 import logging
 import gc
+import os
+from celery import Celery
+import redis
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Initialize the FastAPI app
+
+# Celery configuration
+CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "redis://localhost:6379/0")
+CELERY_RESULT_BACKEND = os.environ.get("CELERY_RESULT_BACKEND", "redis://localhost:6379/0")
+
+celery_app = Celery(
+    "sand_analysis",
+    broker=CELERY_BROKER_URL,
+    backend=CELERY_RESULT_BACKEND
+)
+
+# FastAPI app
 app = FastAPI(title="Sand Grain Analysis API")
 
 # Add CORS middleware after app is defined
@@ -142,7 +158,6 @@ app = FastAPI(title="Sand Grain Analysis API")
 
 @app.post("/analyze/")
 async def analyze_sand(
-    background_tasks: BackgroundTasks,
     image_file: UploadFile = File(...),
     gps_lat: Optional[float] = Form(None),
     gps_lon: Optional[float] = Form(None),
@@ -179,110 +194,91 @@ async def analyze_sand(
     del nparr
     gc.collect()
 
-    # Phase 2: Server-Side Processing
+    # Queue the analysis job for Celery
+    image_bytes = await image_file.read()
+    # Validate image before queuing
+    nparr = np.frombuffer(image_bytes, np.uint8)
+    original_image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    if original_image is None:
+        raise HTTPException(status_code=400, detail="Could not decode the image file")
+    if original_image.shape[0] < 100 or original_image.shape[1] < 100:
+        raise HTTPException(status_code=400, detail="Image is too small for reliable analysis")
+    del original_image
+    del nparr
+    gc.collect()
+    task = analyze_sand_celery.delay(image_bytes, gps_lat, gps_lon)
+    return {"job_id": task.id, "status": "queued"}
 
-    def do_analysis():
-        try:
-            # Step 5 & 6: Pre-process and Detect Scale (generalized)
-            pixels_per_mm, image_for_analysis, scale_confidence, scale_object_type = find_scale_and_mask_reference(original_image)
-            if pixels_per_mm is None:
-                raise HTTPException(status_code=400, detail="Could not detect a valid scale reference (note, card, or coin)")
+# Celery task for sand analysis
+@celery_app.task(bind=True)
+def analyze_sand_celery(self, image_bytes, gps_lat, gps_lon):
+    try:
+        nparr = np.frombuffer(image_bytes, np.uint8)
+        original_image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        if original_image is None:
+            return {"error": "Could not decode the image file"}
+        if original_image.shape[0] < 100 or original_image.shape[1] < 100:
+            return {"error": "Image is too small for reliable analysis"}
 
-            # Step 7, 8, 9: Segment and Measure
-            diameters_mm, segmentation_quality = segment_and_measure_grains(image_for_analysis, pixels_per_mm)
-            if not diameters_mm:
-                raise HTTPException(status_code=400, detail="Could not segment or measure any grains")
+        pixels_per_mm, image_for_analysis, scale_confidence, scale_object_type = find_scale_and_mask_reference(original_image)
+        if pixels_per_mm is None:
+            return {"error": "Could not detect a valid scale reference (note, card, or coin)"}
 
-            # Step 10: Analyze & Classify
-            average_diameter_mm = np.mean(diameters_mm)
-            std_deviation_mm = np.std(diameters_mm)
-            classification = classify_wentworth(average_diameter_mm)
-            grain_count = len(diameters_mm)
+        diameters_mm, segmentation_quality = segment_and_measure_grains(image_for_analysis, pixels_per_mm)
+        if not diameters_mm:
+            return {"error": "Could not segment or measure any grains"}
 
-            # Calculate size distribution
-            size_distribution = calculate_size_distribution(diameters_mm)
+        average_diameter_mm = np.mean(diameters_mm)
+        std_deviation_mm = np.std(diameters_mm)
+        classification = classify_wentworth(average_diameter_mm)
+        grain_count = len(diameters_mm)
+        size_distribution = calculate_size_distribution(diameters_mm)
 
-            # Final results payload
-            results = {
-                "gps_coordinates": {"latitude": gps_lat, "longitude": gps_lon},
-                "classification": classification,
-                "average_grain_size_mm": round(average_diameter_mm, 4),
-                "std_deviation_mm": round(std_deviation_mm, 4),
-                "grain_count": grain_count,
-                "scale_pixels_per_mm": round(pixels_per_mm, 2),
-                "scale_detection_confidence": scale_confidence,
-                "scale_object_type": scale_object_type,
-                "segmentation_quality": segmentation_quality,
-                "size_distribution": size_distribution,
-            }
+        results = {
+            "gps_coordinates": {"latitude": gps_lat, "longitude": gps_lon},
+            "classification": classification,
+            "average_grain_size_mm": round(average_diameter_mm, 4),
+            "std_deviation_mm": round(std_deviation_mm, 4),
+            "grain_count": grain_count,
+            "scale_pixels_per_mm": round(pixels_per_mm, 2),
+            "scale_detection_confidence": scale_confidence,
+            "scale_object_type": scale_object_type,
+            "segmentation_quality": segmentation_quality,
+            "size_distribution": size_distribution
+        }
+        del image_for_analysis
+        del original_image
+        gc.collect()
+        return results
+    except Exception as e:
+        return {"error": f"Analysis error: {str(e)}"}
 
-            # Phase 3: Data Storage & Client Feedback
-            # Step 11: Store Processed Data (Simple print statement for this example)
-            # In a real app, you would save `results` to a database here.
-            logger.info(f"Storing results: {results}")
-
-            # Resource cleanup after analysis
-            del image_for_analysis
-            del original_image
-            gc.collect()
-
-            # Step 12 & 13: Send Results to Client
-            return results
-        except Exception as e:
-            logger.error(f"Error in analysis pipeline: {str(e)}")
-            raise HTTPException(status_code=500, detail=f"Analysis error: {str(e)}")
-
-    # For now, run analysis in the request thread (safe, but can be offloaded)
-    # To offload, use: background_tasks.add_task(do_analysis) and return a job id
-    results = do_analysis()
-    return results
-# --- Batch Processing Extension Point ---
-# To support batch uploads, add a new endpoint (e.g., /analyze_batch/) that accepts multiple images and processes them in a loop using the same efficient logic as above.
+# Endpoint to get job result
+@app.get("/result/{job_id}")
+async def get_result(job_id: str):
+    async_result = celery_app.AsyncResult(job_id)
+    if async_result.state == "PENDING":
+        return {"status": "pending"}
+    elif async_result.state == "STARTED":
+        return {"status": "started"}
+    elif async_result.state == "FAILURE":
+        return {"status": "failure", "error": str(async_result.info)}
+    elif async_result.state == "SUCCESS":
+        return {"status": "success", "result": async_result.result}
+    else:
+        return {"status": async_result.state}
 
 
-
-
-def segment_and_measure_grains(image: np.ndarray, pixels_per_mm: float) -> Tuple[List[float], float]:
+def segment_and_measure_grains(image: np.ndarray, pixels_per_mm: float):
     """
-    Segments touching grains using the Watershed algorithm and measures them.
-
-    Args:
-        image: Input image with scale reference masked out
-        pixels_per_mm: Scale factor for converting pixels to mm
-
-    Returns:
-        Tuple of (grain_diameters_mm, quality_score)
-        grain_diameters_mm: List of grain diameters in mm
-        quality_score: Measure of segmentation quality (0-1)
+    Segments grains in the image using marker-based watershed and measures their diameters in mm.
+    Returns a tuple: (list of diameters in mm, segmentation quality score)
     """
-    # --- Pre-processing for Segmentation ---
-    # We use the image where the note has been masked out
+    # Convert to grayscale
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    blurred = cv2.medianBlur(gray, 5)  # Median blur is good for salt-and-pepper noise
-
-    # Try different threshold parameters to find the best one
-    best_thresh = None
-    best_grain_count = 0
-
-    # Test different block sizes for adaptive thresholding
-    for block_size in [11, 21, 31]:
-        if block_size >= min(gray.shape[0], gray.shape[1]):
-            continue  # Skip if block size is too large for image
-
-        thresh = cv2.adaptiveThreshold(
-            blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, block_size, 5
-        )
-
-        # Count rough number of potential grains
-        num_labels, _ = cv2.connectedComponents(thresh)
-
-        if num_labels > best_grain_count:
-            best_grain_count = num_labels
-            best_thresh = thresh
-
-    # If adaptive thresholding failed, fall back to Otsu's method
-    if best_thresh is None:
-        _, best_thresh = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    # Apply adaptive thresholding to get binary image
+    best_thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                        cv2.THRESH_BINARY_INV, 11, 2)
 
     # --- "Predict Grain Centers" (Simulated with Distance Transform) ---
     # This finds the "sure foreground" which will act as markers

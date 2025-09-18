@@ -7,7 +7,7 @@ import 'package:http/http.dart' as http;
 ///   await ApiService.analyzeSand(imagePath: ..., latitude: ..., longitude: ...);
 class ApiService {
   /// The backend endpoint for sand analysis.
-  static const String _baseUrl = 'http://10.20.34.117:8000/analyze/'; // Update to your backend IP if needed
+  static const String _baseUrl = 'http://10.20.34.117:8000/analyze/'; // Local Wi-Fi IP for phone access
 
   /// Sends an image and GPS coordinates to the backend for analysis.
   ///
