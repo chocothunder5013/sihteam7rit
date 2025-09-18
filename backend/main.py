@@ -113,10 +113,11 @@ def find_scale_and_mask_reference(image: np.ndarray) -> Tuple[Optional[float], O
 import cv2
 import numpy as np
 import uvicorn
-from fastapi import FastAPI, File, Form, UploadFile, HTTPException
+from fastapi import FastAPI, File, Form, UploadFile, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional, Dict, List, Tuple
 import logging
+import gc
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -141,6 +142,7 @@ app = FastAPI(title="Sand Grain Analysis API")
 
 @app.post("/analyze/")
 async def analyze_sand(
+    background_tasks: BackgroundTasks,
     image_file: UploadFile = File(...),
     gps_lat: Optional[float] = Form(None),
     gps_lon: Optional[float] = Form(None),
@@ -155,6 +157,7 @@ async def analyze_sand(
     # Phase 1: Data received and validation
     if not image_file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Uploaded file is not an image")
+
 
     try:
         contents = await image_file.read()
@@ -171,51 +174,70 @@ async def analyze_sand(
         logger.error(f"Error processing image: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Image processing error: {str(e)}")
 
+    # Resource cleanup after image decode
+    del contents
+    del nparr
+    gc.collect()
+
     # Phase 2: Server-Side Processing
-    try:
-        # Step 5 & 6: Pre-process and Detect Scale (generalized)
-        pixels_per_mm, image_for_analysis, scale_confidence, scale_object_type = find_scale_and_mask_reference(original_image)
-        if pixels_per_mm is None:
-            raise HTTPException(status_code=400, detail="Could not detect a valid scale reference (note, card, or coin)")
 
-        # Step 7, 8, 9: Segment and Measure
-        diameters_mm, segmentation_quality = segment_and_measure_grains(image_for_analysis, pixels_per_mm)
-        if not diameters_mm:
-            raise HTTPException(status_code=400, detail="Could not segment or measure any grains")
+    def do_analysis():
+        try:
+            # Step 5 & 6: Pre-process and Detect Scale (generalized)
+            pixels_per_mm, image_for_analysis, scale_confidence, scale_object_type = find_scale_and_mask_reference(original_image)
+            if pixels_per_mm is None:
+                raise HTTPException(status_code=400, detail="Could not detect a valid scale reference (note, card, or coin)")
 
-        # Step 10: Analyze & Classify
-        average_diameter_mm = np.mean(diameters_mm)
-        std_deviation_mm = np.std(diameters_mm)
-        classification = classify_wentworth(average_diameter_mm)
-        grain_count = len(diameters_mm)
+            # Step 7, 8, 9: Segment and Measure
+            diameters_mm, segmentation_quality = segment_and_measure_grains(image_for_analysis, pixels_per_mm)
+            if not diameters_mm:
+                raise HTTPException(status_code=400, detail="Could not segment or measure any grains")
 
-        # Calculate size distribution
-        size_distribution = calculate_size_distribution(diameters_mm)
+            # Step 10: Analyze & Classify
+            average_diameter_mm = np.mean(diameters_mm)
+            std_deviation_mm = np.std(diameters_mm)
+            classification = classify_wentworth(average_diameter_mm)
+            grain_count = len(diameters_mm)
 
-        # Final results payload
-        results = {
-            "gps_coordinates": {"latitude": gps_lat, "longitude": gps_lon},
-            "classification": classification,
-            "average_grain_size_mm": round(average_diameter_mm, 4),
-            "std_deviation_mm": round(std_deviation_mm, 4),
-            "grain_count": grain_count,
-            "scale_pixels_per_mm": round(pixels_per_mm, 2),
-            "scale_detection_confidence": scale_confidence,
-            "scale_object_type": scale_object_type,
-            "segmentation_quality": segmentation_quality,
-            "size_distribution": size_distribution,
-        }
+            # Calculate size distribution
+            size_distribution = calculate_size_distribution(diameters_mm)
 
-        # Phase 3: Data Storage & Client Feedback
-        # Step 11: Store Processed Data (Simple print statement for this example)
-        # In a real app, you would save `results` to a database here.
-        logger.info(f"Storing results: {results}")
+            # Final results payload
+            results = {
+                "gps_coordinates": {"latitude": gps_lat, "longitude": gps_lon},
+                "classification": classification,
+                "average_grain_size_mm": round(average_diameter_mm, 4),
+                "std_deviation_mm": round(std_deviation_mm, 4),
+                "grain_count": grain_count,
+                "scale_pixels_per_mm": round(pixels_per_mm, 2),
+                "scale_detection_confidence": scale_confidence,
+                "scale_object_type": scale_object_type,
+                "segmentation_quality": segmentation_quality,
+                "size_distribution": size_distribution,
+            }
 
-        # Step 12 & 13: Send Results to Client
-        return results
-    except Exception as e:
-        logger.error(f"Error in analysis pipeline: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Analysis error: {str(e)}")
+            # Phase 3: Data Storage & Client Feedback
+            # Step 11: Store Processed Data (Simple print statement for this example)
+            # In a real app, you would save `results` to a database here.
+            logger.info(f"Storing results: {results}")
+
+            # Resource cleanup after analysis
+            del image_for_analysis
+            del original_image
+            gc.collect()
+
+            # Step 12 & 13: Send Results to Client
+            return results
+        except Exception as e:
+            logger.error(f"Error in analysis pipeline: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Analysis error: {str(e)}")
+
+    # For now, run analysis in the request thread (safe, but can be offloaded)
+    # To offload, use: background_tasks.add_task(do_analysis) and return a job id
+    results = do_analysis()
+    return results
+# --- Batch Processing Extension Point ---
+# To support batch uploads, add a new endpoint (e.g., /analyze_batch/) that accepts multiple images and processes them in a loop using the same efficient logic as above.
 
 
 
