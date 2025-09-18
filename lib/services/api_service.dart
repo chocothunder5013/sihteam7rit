@@ -7,7 +7,7 @@ import 'package:http/http.dart' as http;
 ///   await ApiService.analyzeSand(imagePath: ..., latitude: ..., longitude: ...);
 class ApiService {
   /// The backend endpoint for sand analysis.
-  static const String _baseUrl = 'https://sihteam7rit.onrender.com/analyze/'; // Render cloud backend
+  static const String _baseUrl = 'https://sand-backend-x20i.onrender.com/analyze/'; // Render cloud backend
 
   /// Sends an image and GPS coordinates to the backend for analysis.
   ///
