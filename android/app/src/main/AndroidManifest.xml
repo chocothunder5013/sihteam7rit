@@ -2,6 +2,8 @@
     <!-- Location permissions for geolocator -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Internet permission for API access -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <application
         android:label="beach_grain_sense_flutter"
         android:name="${applicationName}"
