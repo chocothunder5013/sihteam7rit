@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
+import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:geolocator/geolocator.dart';
 import '../services/api_service.dart';
@@ -12,6 +13,7 @@ class CameraScreen extends StatefulWidget {
 }
 
 class _CameraScreenState extends State<CameraScreen> {
+  final ImagePicker _picker = ImagePicker();
   CameraController? _controller;
   List<CameraDescription>? _cameras;
   bool _isLoading = false;
@@ -117,6 +119,19 @@ class _CameraScreenState extends State<CameraScreen> {
   void dispose() {
     _controller?.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickFromGallery() async {
+    try {
+      final XFile? picked = await _picker.pickImage(source: ImageSource.gallery);
+      if (picked != null) {
+        setState(() {
+          _previewPhoto = picked;
+        });
+      }
+    } catch (e) {
+      setState(() => _error = 'Gallery error: $e');
+    }
   }
 
   @override
@@ -250,16 +265,33 @@ class _CameraScreenState extends State<CameraScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  ElevatedButton.icon(
-                    icon: const Icon(Icons.camera, size: 28),
-                    onPressed: _isLoading ? null : _takePicture,
-                    label: const Text('Capture', style: TextStyle(fontSize: 20)),
-                    style: ElevatedButton.styleFrom(
-                      minimumSize: const Size(140, 56),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.camera, size: 28),
+                        onPressed: _isLoading ? null : _takePicture,
+                        label: const Text('Capture', style: TextStyle(fontSize: 20)),
+                        style: ElevatedButton.styleFrom(
+                          minimumSize: const Size(140, 56),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
                       ),
-                    ),
+                      const SizedBox(height: 12),
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.photo_library, size: 28),
+                        onPressed: _isLoading ? null : _pickFromGallery,
+                        label: const Text('Add from Phone Storage', style: TextStyle(fontSize: 16)),
+                        style: ElevatedButton.styleFrom(
+                          minimumSize: const Size(140, 48),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(width: 16),
                   // Circular, compact focus button
