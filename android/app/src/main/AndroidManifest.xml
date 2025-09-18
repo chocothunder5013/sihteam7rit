@@ -2,6 +2,10 @@
     <!-- Location permissions for geolocator -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Camera and media permissions for image_picker/camera -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- For Android 13+ (API 33+) to access images -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <!-- Internet permission for API access -->
     <uses-permission android:name="android.permission.INTERNET" />
     <application
