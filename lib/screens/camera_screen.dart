@@ -95,7 +95,11 @@ class _CameraScreenState extends State<CameraScreen> {
       if (!mounted) return;
       await Future.delayed(const Duration(milliseconds: 200));
       if (mounted) {
-        Navigator.pushReplacementNamed(context, '/results', arguments: analysis);
+        if (analysis['error'] != null) {
+          setState(() => _error = analysis['error'].toString());
+        } else {
+          Navigator.pushReplacementNamed(context, '/results', arguments: analysis);
+        }
       }
     } catch (e) {
       setState(() => _error = 'Error: $e');
