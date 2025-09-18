@@ -3,8 +3,25 @@ services:
     name: sand-backend
     env: python
     plan: free
-    buildCommand: pip install -r backend/requirements.txt
+    buildCommand: pip install -r backend/requirements.txt && pip install python-dotenv
     startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /healthz
     envVars:
       - key: PORT
         value: 10000
+      - key: FRONTEND_ORIGIN
+        value: https://your-frontend.vercel.app
+      - key: CELERY_BROKER_URL
+        value: redis://:<password>@<redis-host>:6379/0
+      - key: CELERY_RESULT_BACKEND
+        value: redis://:<password>@<redis-host>:6379/0
+      # Add secrets and config as environment variables here, e.g.:
+      # - key: SECRET_KEY
+      #   value: your-secret-key
+
+# ---
+# Optimization & Production Tips:
+# - For higher concurrency, consider: startCommand: gunicorn -k uvicorn.workers.UvicornWorker backend.main:app --bind 0.0.0.0:$PORT --workers 2
+# - Set plan: standard or higher for production workloads
+# - Add more envVars for DB, Redis, etc. as needed
+# - Use healthCheckPath for Render health monitoring

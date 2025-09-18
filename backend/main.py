@@ -124,8 +124,12 @@ import os
 from celery import Celery
 import redis
 
+import logging
+from dotenv import load_dotenv
 # Set up logging
 logging.basicConfig(level=logging.INFO)
+load_dotenv()
+from fastapi import APIRouter
 logger = logging.getLogger(__name__)
 
 
@@ -141,16 +145,42 @@ celery_app = Celery(
 
 # FastAPI app
 app = FastAPI(title="Sand Grain Analysis API")
+router = APIRouter()
 
-# Add CORS middleware after app is defined
-# In production, set allow_origins to your frontend domain(s) only
+# Health check endpoint
+@router.get("/healthz")
+def health_check():
+    return {"status": "ok"}
+
+app.include_router(router)
+
+
+# Add CORS middleware for Vercel frontend
+FRONTEND_ORIGIN = os.environ.get("FRONTEND_ORIGIN", "https://your-frontend.vercel.app")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # TODO: Change to ["https://your-frontend-domain.com"] for production
+    allow_origins=[FRONTEND_ORIGIN],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Global exception handler for unhandled errors
+from fastapi.responses import JSONResponse
+from fastapi.requests import Request
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled error: {exc}")
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+
+# Log rotation for production
+from logging.handlers import RotatingFileHandler
+file_handler = RotatingFileHandler("backend.log", maxBytes=2*1024*1024, backupCount=2)
+file_handler.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s %(levelname)s %(name)s %(message)s')
+file_handler.setFormatter(formatter)
+if not any(isinstance(h, RotatingFileHandler) for h in logger.handlers):
+    logger.addHandler(file_handler)
 
 # Initialize the FastAPI app
 app = FastAPI(title="Sand Grain Analysis API")
