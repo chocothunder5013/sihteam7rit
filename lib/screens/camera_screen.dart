@@ -6,7 +6,7 @@ import 'package:geolocator/geolocator.dart';
 import '../services/api_service.dart';
 
 class CameraScreen extends StatefulWidget {
-  const CameraScreen({Key? key}) : super(key: key);
+  const CameraScreen({super.key});
 
   @override
   State<CameraScreen> createState() => _CameraScreenState();
@@ -244,7 +244,7 @@ class _CameraScreenState extends State<CameraScreen> {
             AnimatedOpacity(
               opacity: _showShutter ? 1.0 : 0.0,
               duration: const Duration(milliseconds: 120),
-              child: Container(color: Colors.white.withOpacity(0.7)),
+              child: Container(color: Colors.white.withAlpha((0.7 * 255).toInt())),
             ),
           if (_isFocusing)
             Center(

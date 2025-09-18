@@ -8,7 +8,7 @@ void main() {
 }
 
 class BeachGrainSenseApp extends StatefulWidget {
-  const BeachGrainSenseApp({Key? key}) : super(key: key);
+  const BeachGrainSenseApp({super.key});
 
   @override
   State<BeachGrainSenseApp> createState() => _BeachGrainSenseAppState();
@@ -43,8 +43,7 @@ class _BeachGrainSenseAppState extends State<BeachGrainSenseApp> {
         colorScheme: ColorScheme.light(
           primary: const Color(0xFF6EC6CA), // Soft teal
           secondary: const Color(0xFFB2DFDB),
-          background: const Color(0xFFF0F4F8),
-          surface: Colors.white,
+          surface: Colors.white, // Use surface instead of deprecated background
         ),
         scaffoldBackgroundColor: const Color(0xFFF0F4F8),
         appBarTheme: const AppBarTheme(
@@ -75,8 +74,7 @@ class _BeachGrainSenseAppState extends State<BeachGrainSenseApp> {
         colorScheme: ColorScheme.dark(
           primary: const Color(0xFF37474F), // Blue-grey
           secondary: const Color(0xFF80CBC4),
-          background: const Color(0xFF263238),
-          surface: const Color(0xFF37474F),
+          surface: const Color(0xFF37474F), // Use surface instead of deprecated background
         ),
         scaffoldBackgroundColor: const Color(0xFF263238),
         appBarTheme: const AppBarTheme(

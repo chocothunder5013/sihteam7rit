@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 class HomeScreen extends StatelessWidget {
   final VoidCallback? onToggleTheme;
   final ThemeMode? themeMode;
-  const HomeScreen({Key? key, this.onToggleTheme, this.themeMode}) : super(key: key);
+  const HomeScreen({super.key, this.onToggleTheme, this.themeMode});
 
   @override
   Widget build(BuildContext context) {
