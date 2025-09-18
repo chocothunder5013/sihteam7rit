@@ -6,8 +6,8 @@ import 'package:http/http.dart' as http;
 /// Usage:
 ///   await ApiService.analyzeSand(imagePath: ..., latitude: ..., longitude: ...);
 class ApiService {
-  /// The backend endpoint for sand analysis.
-  static const String _baseUrl = 'https://sand-backend-x20i.onrender.com/analyze/'; // Render cloud backend
+  /// The backend base URL for sand analysis API.
+  static const String _baseUrl = 'https://sand-backend-x20i.onrender.com'; // Render cloud backend
 
   /// Sends an image and GPS coordinates to the backend for analysis.
   ///
@@ -26,7 +26,7 @@ class ApiService {
     required double latitude,
     required double longitude,
   }) async {
-    var request = http.MultipartRequest('POST', Uri.parse(_baseUrl));
+    var request = http.MultipartRequest('POST', Uri.parse('$_baseUrl/analyze/'));
     request.files.add(await http.MultipartFile.fromPath('image_file', imagePath));
     request.fields['gps_lat'] = latitude.toString();
     request.fields['gps_lon'] = longitude.toString();
